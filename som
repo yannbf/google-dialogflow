@@ -1,0 +1,193 @@
+//Initialize libraries
+import * as functions from 'firebase-functions';
+import { dialogflow, SimpleResponse, Suggestions, Carousel, BrowseCarousel, BrowseCarouselItem, Image, LinkOutSuggestion, DialogflowApp, OptionItem } from 'actions-on-google';
+
+// import * as Datastore from '@google-cloud/datastore';
+// import axios from 'axios';
+
+// // Start writing Firebase Functions
+// // https://firebase.google.com/docs/functions/typescript
+//
+// export const helloWorld = functions.https.onRequest((request, response) => {
+//  response.send("Hello from Firebase!");
+// });
+
+// Instantiate a datastore client
+// const datastore = Datastore();
+
+const app = dialogflow({ debug: true });
+const numProducts = 3;
+
+//Setup contexts
+const Contexts = {
+  ONE_MORE: 'one_more'
+};
+
+app.intent('quit_app', (conv) => {
+  conv.close("Have a good day! come back again. Bye!");
+});
+
+app.intent('start_app', (conv) => {
+  conv.contexts.set(Contexts.ONE_MORE, 5);
+  const initMessage = `Welcome to Pepper! With great discounts, I will guide you.`;
+
+  return getQuote().then((entity) => {
+    return getMessageFromQuote(entity, initMessage, conv);
+  });
+});
+
+function buildOptionItem(dialogApp, aString: string): OptionItem {
+  // Provide a key which is unique to each option.
+  // And synonyms that the user can say alternativly to the title
+  return dialogApp.buildOptionItem(`KEY_${aString}`, aString)
+      .setTitle(`Option ${aString}`)
+      // Description and image are optional.
+      .setDescription(`Description for ${aString}`)
+      .setImage('https://example.com/image.jpg', 'An image')
+}
+
+app.intent('one_more_yes', (conv) => {
+  conv.contexts.set(Contexts.ONE_MORE, 3);
+  const initMessage = `Great! Here is another one.`;
+
+  conv.ask(new Suggestions('Suggestion Chips'));
+  conv.ask(new Suggestions(['suggestion 1', 'suggestion 2']));
+  return conv.ask(new LinkOutSuggestion({
+    name: 'Suggestion Link',
+    url: 'https://assistant.google.com/',
+  }));
+
+  // return getQuote().then((entity) => {
+  //   return getMessageFromQuote(entity, initMessage, conv);
+  // });
+});
+
+app.intent('one_more_no', (conv) => {
+  conv.close("Hope I was helpful! Have a good day and come back for more.");
+});
+
+app.intent('Default Fallback Intent', (conv: any) => {
+  // console.log(conv.data.fallbackCount);
+  if (typeof conv.data.fallbackCount !== 'number') {
+    conv.data.fallbackCount = 0;
+  }
+  conv.data.fallbackCount++;
+  // Provide two prompts before ending game
+  if (conv.data.fallbackCount === 1) {
+    conv.contexts.set(Contexts.ONE_MORE, 2);
+    return conv.ask(new Suggestions('Yes Please', 'No thanks'), new SimpleResponse("Would you like to check more deals?"));
+  } else if (conv.data.fallbackCount === 2) {
+    return conv.ask(new Suggestions('Yes Please', 'No thanks'), new SimpleResponse("Welcome to Pepper! With great discounts, I will guide you. Would you like to check some deals?"));
+  }
+  return conv.close("This isn't working. Have a good day. Bye! ");
+});
+
+function getRandomNumber() {
+  return Math.floor(Math.random() * numProducts);
+}
+
+function buildReadableQuoteFromEntity(entity) {
+  const readableQuote = `I found the product ${entity.name}. It costs ${entity.price} euros.`;
+  // if (entity.comments) {
+  //   readableQuote += entity.comments + ` `;
+  // }
+  return readableQuote;
+}
+
+function getViewableQuote(entity) {
+  const viewableQuote = `I found the product ${entity.name}. It costs ${entity.price} euros.`;
+  // if (entity.comments) {
+  //   viewableQuote += entity.comments + ` `;
+  // }
+  return viewableQuote;
+}
+
+function getEndingMessage() {
+  // return `<audio src="https://actions.google.com/sounds/v1/water/waves_crashing_on_rock_beach.ogg" clipBegin="10s" clipEnd="13s">Consider the quote!</audio>
+    //  Do you want to listen to another quote?`;
+    return 'Do you want to check more deals?';
+}
+
+function getEndingMessageText() {
+  return 'Do you want to check more deals?';
+}
+
+function getMessageFromQuote(entity, initMessage, conv) {
+  const a11yText = 'Google Assistant Bubbles';
+  const googleUrl = 'https://google.com';
+  if (!conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT')) {
+    conv.ask('Sorry, try this on a screen device or select the ' +
+      'phone surface in the simulator.');
+    return;
+  }
+
+  // return conv.ask(new BrowseCarousel({
+  //   items: [
+  //     new BrowseCarouselItem({
+  //       title: 'Title of item 1',
+  //       url: googleUrl,
+  //       description: 'Description of item 1',
+  //       image: new Image({
+  //         url: `https://www.buildabear.com/dw/image/v2/BBNG_PRD/on/demandware.static/-/Sites-buildabear-master/default/dwa4ae30da/25239x.jpg`,
+  //         alt: a11yText,
+  //       }),
+  //       footer: 'Item 1 footer',
+  //     }),
+  //     new BrowseCarouselItem({
+  //       title: 'Title of item 2',
+  //       url: googleUrl,
+  //       description: 'Description of item 2',
+  //       image: new Image({
+  //         url: `https://www.buildabear.com/dw/image/v2/BBNG_PRD/on/demandware.static/-/Sites-buildabear-master/default/dwa4ae30da/25239x.jpg`,
+  //         alt: a11yText,
+  //       }),
+  //       footer: 'Item 2 footer',
+  //     }),
+  //   ],
+  // }));
+
+  return conv.ask(
+    new Suggestions('Yes Please', 'No thanks'),
+    new SimpleResponse(initMessage),
+    new SimpleResponse({
+      text: getViewableQuote(entity) + getEndingMessageText(),
+      speech: `<speak> ` + buildReadableQuoteFromEntity(entity) + getEndingMessage() + ` </speak>  `
+    })
+  );
+}
+
+const mockData = [
+  {name: 'iPhone XR 256GB', price: '909', url: 'www.google.com'},
+  {name: 'Skagen Hagen Connected - Hybrid Unisex Smartwatch', price: '109.5', url: 'www.google.com'},
+  {name: 'iPhone 8 Plus 256GB @ Amazon.fr', price: '787.59', url: 'www.google.com'},
+]
+
+function getQuote() {
+  console.log('vdc');
+  scrape();
+  return new Promise(((resolve, reject) => {
+    const randomQuoteNum = getRandomNumber();
+    // console.log("the id of the quote is: quote_" + randomQuoteNum);
+
+    // axios.get('https://www.mercadobitcoin.net/api/BTC/ticker/')
+    // .then((response) => {
+    //   console.log(response);
+      resolve(mockData[randomQuoteNum]);
+    // });
+
+    // const key = datastore.key(['quote', 'quote_' + randomQuoteNum]);
+    // console.log("Querying datastore for the quote..." + key);
+    // const readableQuote = '';
+    // datastore.get('products', (err, entity) => {
+    //   if (!err) {
+    //     console.log('entity:' + entity);
+    //     resolve(entity);
+    //   } else {
+    //     reject(() => console.log('Error occured'));
+    //   }
+    // });
+  }));
+}
+
+// HTTP Cloud Function for Firebase handler
+exports.InspireMe = functions.https.onRequest(app);
